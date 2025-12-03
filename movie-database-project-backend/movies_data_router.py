@@ -135,6 +135,7 @@ async def get_specific_movie(
         .where(Movie.id == movie_id)
         .options(
             selectinload(Movie.genres),
+            selectinload(Movie.keywords_clusters),
             selectinload(Movie.keywords),
             selectinload(Movie.movie_credits)
             .selectinload(MovieCredits.person)

@@ -12,6 +12,7 @@ class MovieOutput(BaseModel):
     backdrop_path: Optional[str]
     release_date: Optional[str]
     genres: List[str]
+    cluster_labels: Optional[str]
     keywords: List[str]
     directors: List[str]
     casts: List[str]
@@ -39,6 +40,7 @@ def getMovieOutput(movie: Movie) -> MovieOutput:
         backdrop_path=movie.backdrop_path,
         release_date=str(movie.release_date),
         genres=[g.genre_name for g in movie.genres],
+        cluster_labels=[kc.cluster_label for kc in movie.keywords_clusters][0],
         keywords=[k.keyword_name for k in movie.keywords],
         directors=[
             m.person.name
