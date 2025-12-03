@@ -1,0 +1,59 @@
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+from db import Movie, MovieKeywords
+
+
+class MovieOutput(BaseModel):
+    id: str
+    title: str
+    overview: Optional[str]
+    adult: bool
+    poster_path: Optional[str]
+    backdrop_path: Optional[str]
+    release_date: Optional[str]
+    genres: List[str]
+    keywords: List[str]
+    directors: List[str]
+    casts: List[str]
+
+
+class MovieListsWithNumPage(BaseModel):
+    numPage: int
+    headers: Dict[str, str]
+    listUrl: str
+
+
+class MovieKeywordsSchema(BaseModel):
+    cluster_label: str
+
+
+class KeywordClustersSchema(BaseModel):
+    cluster_label: str
+    keywords: List[str]
+
+def getMovieKeywordsOutput(keywords: dict) -> dict[dict]:
+    return 
+
+
+def getMovieOutput(movie: Movie) -> MovieOutput:
+    return MovieOutput(
+        id=movie.id,
+        title=movie.title,
+        overview=movie.overview,
+        adult=movie.adult,
+        poster_path=movie.poster_path,
+        backdrop_path=movie.backdrop_path,
+        release_date=str(movie.release_date),
+        genres=[g.genre_name for g in movie.genres],
+        keywords=[k.keyword_name for k in movie.keywords],
+        directors=[
+            m.person.name
+            for m in movie.movie_credits
+            if m.person.job_role.name == "Director"
+        ],
+        casts=[
+            m.person.name
+            for m in movie.movie_credits
+            if m.person.job_role.name == "Cast"
+        ],
+    )
