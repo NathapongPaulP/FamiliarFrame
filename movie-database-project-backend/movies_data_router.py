@@ -100,6 +100,8 @@ async def create_movie(
             await session.flush()
             session.add(MovieCredits(movie_id=new_movie.id, person_id=new_person.id))
 
+        moviesToSkip.add(str(movie_data["id"]))
+
     await session.commit()
     return {"message": "Movies created"}
 
@@ -122,3 +124,25 @@ async def get_movies(page: int = 1, session: AsyncSession = Depends(get_async_se
     movies = result.scalars().all()
 
     return {"movies": [getMovieOutput(movie) for movie in movies]}
+
+
+@router.get("/by_id")
+async def get_specific_movie(
+    movie_id: str, session: AsyncSession = Depends(get_async_session)
+):
+    result = await session.execute(
+        select(Movie)
+        .where(Movie.id == movie_id)
+        .options(
+            selectinload(Movie.genres),
+            selectinload(Movie.keywords),
+            selectinload(Movie.movie_credits)
+            .selectinload(MovieCredits.person)
+            .selectinload(Person.job_role),
+        )
+    )
+    movie = result.scalar_one_or_none()
+    if not movie:
+        return {"error": "Movie not found"}
+
+    return {"movie": getMovieOutput(movie)}

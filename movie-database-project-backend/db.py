@@ -48,6 +48,10 @@ class Movie(Base):
         "MovieCredits", back_populates="movie", cascade="all, delete-orphan"
     )
 
+    keywords_clusters: Mapped[list["KeywordClusters"]] = relationship(
+        "KeywordClusters", back_populates="movie", cascade="all, delete-orphan"
+    )
+
 
 class MovieGenres(Base):
     __tablename__ = "movie_genres"
@@ -127,10 +131,13 @@ class KeywordClusters(Base):
     id: Mapped[str] = mapped_column(
         CHAR(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    cluster_label: Mapped[int] = mapped_column(nullable=False)
+    cluster_label: Mapped[str] = mapped_column(String(255), nullable=False)
     keyword_id: Mapped[str] = mapped_column(
         CHAR(36), ForeignKey("movie_keywords.keyword_id")
     )
+    movie_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("movies.id"))
+
+    movie: Mapped["Movie"] = relationship("Movie", back_populates="keywords_clusters")
 
     keyword: Mapped["MovieKeywords"] = relationship(
         "MovieKeywords", back_populates="keyword_clusters"

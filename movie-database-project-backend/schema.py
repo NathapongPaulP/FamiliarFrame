@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict
-from db import Movie, MovieKeywords
+from db import Movie, MovieKeywords, KeywordClusters
 
 
 class MovieOutput(BaseModel):
@@ -23,16 +23,10 @@ class MovieListsWithNumPage(BaseModel):
     listUrl: str
 
 
-class MovieKeywordsSchema(BaseModel):
-    cluster_label: str
-
-
 class KeywordClustersSchema(BaseModel):
     cluster_label: str
     keywords: List[str]
-
-def getMovieKeywordsOutput(keywords: dict) -> dict[dict]:
-    return 
+    movie_id: str
 
 
 def getMovieOutput(movie: Movie) -> MovieOutput:

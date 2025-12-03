@@ -1,10 +1,13 @@
 from fastapi import APIRouter, Depends
+from movies_data_router import get_specific_movie
 
-from db import MovieKeywords, get_async_session
-from schema import MovieKeywordsSchema, KeywordClustersSchema
+from db import MovieKeywords, get_async_session, KeywordClusters
+from schema import KeywordClustersSchema
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy.orm import selectinload
+
 from sentence_transformers import SentenceTransformer
 
 import numpy as np
@@ -19,7 +22,7 @@ model = SentenceTransformer("all-MiniLM-L6-v2")
 
 
 @router.get("/")
-async def getMovieKeywords(session: AsyncSession = Depends(get_async_session)):
+async def get_movie_keywords(session: AsyncSession = Depends(get_async_session)):
     result = await session.execute(select(MovieKeywords))
     movie_keywords = result.scalars().all()
 
@@ -31,12 +34,39 @@ async def getMovieKeywords(session: AsyncSession = Depends(get_async_session)):
     return {"movie_keywords": movie_keywords_dict}
 
 
+@router.get("/by_movie_id")
+async def get_specific_movie_keywords(
+    movie_id: str, session: AsyncSession = Depends(get_async_session)
+):
+    result = await session.execute(
+        select(KeywordClusters)
+        .where(KeywordClusters.movie_id == movie_id)
+        .options(selectinload(KeywordClusters.keyword))
+    )
+
+    result_2 = await session.execute(
+        select(MovieKeywords).where(MovieKeywords.movie_id == movie_id)
+    )
+
+    keywords = result_2.scalars().all()
+
+    keyword_clusters = result.scalars().all()
+    cluster_labels = set([kc.cluster_label for kc in keyword_clusters])
+    keywords = {k.keyword_id: k.keyword_name for k in keywords}
+
+    return {
+        "movie_id": movie_id,
+        "cluster_labels": list(cluster_labels)[0] if cluster_labels else None,
+        "keywords": keywords,
+    }
+
+
 @router.get("/clusters")
-async def getKeywordClusters(
+async def get_keyword_clusters(
     session: AsyncSession = Depends(get_async_session),
 ):
     # LOAD KEYWORDS
-    keywords = await getMovieKeywords(session=session)
+    keywords = await get_movie_keywords(session=session)
 
     cluster_labels, noise_keywords = clusterKeywords(keywords)
     # Return clean response
@@ -46,26 +76,50 @@ async def getKeywordClusters(
     }
 
 
-@router.get("/create_clusters")
-async def postKeywordClusers(session: AsyncSession = Depends(get_async_session)):
-    movie_keywords = await getMovieKeywords(session=session)
-    cluster_labels = await getKeywordClusters(session=session)
-    cluster_labels_dict = {
-        label: []
-        for i in cluster_labels["clusters"]
-        for key, label in cluster_labels["clusters"][i].items()
-        if key == "label"
+@router.post("/create_clusters")
+async def post_keyword_clusers(session: AsyncSession = Depends(get_async_session)):
+    keywordClusters = await session.execute(select(KeywordClusters))
+    keywordClusters = keywordClusters.scalars().all()
+    keyword_clusters_dict = {kc.cluster_label: [] for kc in keywordClusters}
+
+    if not list(keyword_clusters_dict.keys()):
+        movie_keywords = await get_movie_keywords(session=session)
+        cluster_labels = await get_keyword_clusters(session=session)
+        cluster_labels_dict = {
+            label: set()
+            for i in cluster_labels["clusters"]
+            for key, label in cluster_labels["clusters"][i].items()
+            if key == "label"
+        }
+
+        for movie_id in movie_keywords["movie_keywords"]:
+            for keyword in movie_keywords["movie_keywords"][movie_id]:
+                for cluster_id in cluster_labels["clusters"]:
+                    if keyword in cluster_labels["clusters"][cluster_id]["keywords"]:
+                        cluster_labels_dict[
+                            cluster_labels["clusters"][cluster_id]["label"]
+                        ].add(movie_id)
+
+        for label, movies in cluster_labels_dict.items():
+            movies = list(movies)
+            for movie_id in movies:
+                movie = await get_specific_movie_keywords(movie_id, session)
+                for keyword_id, keyword in movie["keywords"].items():
+                    keyword_cluster = KeywordClusters(
+                        cluster_label=label, keyword_id=keyword_id, movie_id=movie_id
+                    )
+                    session.add(keyword_cluster)
+        await session.commit()
+
+        return {"status": "success", "created_cluster": cluster_labels_dict}
+
+    for kc in keywordClusters:
+        keyword_clusters_dict[kc.cluster_label].append(kc.movie_id)
+
+    return {
+        "status": "clusters already exist",
+        "existing_cluster_ids": cluster_labels_dict,
     }
-
-    for movie_id in movie_keywords["movie_keywords"]:
-        for keyword in movie_keywords["movie_keywords"][movie_id]:
-            for cluster_id in cluster_labels["clusters"]:
-                if keyword in cluster_labels["clusters"][cluster_id]["keywords"]:
-                    cluster_labels_dict[
-                        cluster_labels["clusters"][cluster_id]["label"]
-                    ].append(movie_id)
-
-    return cluster_labels_dict
 
 
 def clusterKeywords(keywords: dict) -> dict:
