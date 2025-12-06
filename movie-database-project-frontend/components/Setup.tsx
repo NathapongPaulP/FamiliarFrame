@@ -4,7 +4,13 @@ import { ClustersIdsLabelsMovies } from "@/src/api/ClustersIdsLabelsMovies";
 import { GetMovieDataFromIds } from "@/src/api/GetMovieDataFromIds";
 import { MovieIds } from "@/src/api/MovieIds";
 import cluster from "cluster";
-import { motion, useScroll, useTransform, useInView } from "motion/react";
+import {
+  motion,
+  useScroll,
+  useTransform,
+  useInView,
+  inertia,
+} from "motion/react";
 import { ElementType, useEffect, useRef, useState } from "react";
 
 const Setup = () => {
@@ -17,9 +23,11 @@ const Setup = () => {
   const [clusterMoviesIds, setClusterMoviesIds] = useState([]);
   const [dynamicKey, setDynamicKey] = useState([]);
   const [labelsList, setLabelsList] = useState([]);
-  const [rawLabelList, setRawLabelList] = useState([]);
+  const [rawLabelObj, setRawLabelObj] = useState({});
   const [setUpFixed, setSetUpFixed] = useState("");
   const [posterDisplay, setPosterDisplay] = useState("");
+  const [movIdsToDisplay, setMovIdsToDisplay] = useState([]);
+  const [posterPath, setPosterPath] = useState([]);
 
   useEffect(() => {
     async function fetchClustersIdsLabelsMovies() {
@@ -72,7 +80,13 @@ const Setup = () => {
       return clusterLabels.includes(con) ? con : undefined;
     });
 
-    setRawLabelList(labels);
+    const labelsObj = {};
+    for (const arr of content) {
+      const con = pickRandom(arr);
+      labelsObj[con] = arr.indexOf(con);
+    }
+
+    setRawLabelObj(labelsObj);
     const setOfLabels = new Set(labels);
     setLabelsList([...setOfLabels]);
   }, [content]);
@@ -85,11 +99,31 @@ const Setup = () => {
   }, [labelsList]);
 
   useEffect(() => {
-    const movIdsIdx = rawLabelList.map((label) => {
-      return clusterMoviesIds[clusterLabels.indexOf(label)];
+    const movIds = Object.keys(rawLabelObj).map((key, index) => {
+      return clusterMoviesIds[index][rawLabelObj[key]];
     });
-    console.log(movIdsIdx);
-  }, [rawLabelList]);
+    setMovIdsToDisplay(movIds);
+  }, [rawLabelObj]);
+
+  useEffect(() => {
+    async function fetchMoviesToDisplay() {
+      const movieDatas = [];
+      for (const id of movIdsToDisplay) {
+        const data = await GetMovieDataFromIds(id);
+        const dataKey = Object.keys(data.movie);
+        for (const key of dataKey) {
+          if (key === "poster_path") {
+            movieDatas.push(data.movie[key]);
+          }
+        }
+      }
+      return movieDatas;
+    }
+    fetchMoviesToDisplay().then((data) => {
+      setPosterPath(data);
+      console.log(data);
+    });
+  }, [movIdsToDisplay]);
 
   return (
     <>
@@ -104,7 +138,12 @@ const Setup = () => {
           setUpFixed={setUpFixed}
         />
         <div className="w-[50vw] h-screen">
-          <Poster setUpFixed={setUpFixed} posterDisplay={posterDisplay} />
+          <Poster
+            setUpFixed={setUpFixed}
+            posterDisplay={posterDisplay}
+            posterPath={posterPath}
+            scrollYProgress={scrollYProgress}
+          />
         </div>
       </div>
     </>
@@ -119,7 +158,7 @@ const DynamicText = ({ scrollYProgress, content, index }) => {
 
   return (
     <motion.div
-      className="relative ml-[5vw] mb-[5vh] text-responsive-setup text-white"
+      className="relative ml-[5vw] mb-[5vh] text-responsive-sm text-white"
       style={{ opacity }}
     >
       {content}
@@ -144,19 +183,50 @@ const SetupText = ({ scrollYProgress, labelsList, dynamicKey, setUpFixed }) => {
   );
 };
 
-const Poster = ({ setUpFixed, posterDisplay }) => {
+const Poster = ({ setUpFixed, posterDisplay, posterPath, scrollYProgress }) => {
+  return posterPath.map((path, index) => {
+    return (
+      <DynamicPoster
+        key={index}
+        scrollYProgress={scrollYProgress}
+        path={path}
+        index={index}
+        posterDisplay={posterDisplay}
+        setUpFixed={setUpFixed}
+      />
+    );
+  });
+};
+
+const DynamicPoster = ({
+  scrollYProgress,
+  path,
+  index,
+  posterDisplay,
+  setUpFixed,
+}) => {
+  const yRange = [
+    index * 0.1,
+    index * 0.1 + 0.01,
+    index * 0.1 + 0.05,
+    index * 0.1 + 0.051,
+    index * 0.1 + 0.1,
+  ];
+  const opacity = useTransform(scrollYProgress, yRange, [0, 0.9, 1, 0, 0]);
+
   return (
-    <>
-      <motion.img
-        className="top-[25vh] right-[20vw]"
-        style={{
-          display: posterDisplay,
-          position: setUpFixed,
-          height: "600px",
-          width: "400px",
-        }}
-      ></motion.img>
-    </>
+    <motion.img
+      className="top-[25vh] right-[20vw]"
+      key={index}
+      src={path}
+      style={{
+        display: posterDisplay,
+        position: setUpFixed,
+        height: "50vh",
+        width: "auto",
+        opacity,
+      }}
+    ></motion.img>
   );
 };
 
