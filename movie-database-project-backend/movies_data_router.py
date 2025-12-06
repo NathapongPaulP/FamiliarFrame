@@ -112,6 +112,7 @@ async def get_movies(page: int = 1, session: AsyncSession = Depends(get_async_se
         select(Movie)
         .options(
             selectinload(Movie.genres),
+            selectinload(Movie.keywords_clusters),
             selectinload(Movie.keywords),
             selectinload(Movie.movie_credits)
             .selectinload(MovieCredits.person)

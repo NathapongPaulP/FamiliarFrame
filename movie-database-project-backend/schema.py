@@ -40,7 +40,11 @@ def getMovieOutput(movie: Movie) -> MovieOutput:
         backdrop_path=movie.backdrop_path,
         release_date=str(movie.release_date),
         genres=[g.genre_name for g in movie.genres],
-        cluster_labels=[kc.cluster_label for kc in movie.keywords_clusters][0],
+        cluster_labels=(
+            [kc.cluster_label for kc in movie.keywords_clusters][0]
+            if movie.keywords_clusters
+            else None
+        ),
         keywords=[k.keyword_name for k in movie.keywords],
         directors=[
             m.person.name

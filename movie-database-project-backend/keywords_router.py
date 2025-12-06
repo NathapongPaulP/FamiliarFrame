@@ -78,9 +78,20 @@ async def get_keyword_clusters(
 
 @router.post("/create_clusters")
 async def post_keyword_clusers(session: AsyncSession = Depends(get_async_session)):
-    keywordClusters = await session.execute(select(KeywordClusters))
+    keywordClusters = await session.execute(
+        select(KeywordClusters).options(
+            selectinload(KeywordClusters.movie),
+            selectinload(KeywordClusters.keyword),
+        )
+    )
     keywordClusters = keywordClusters.scalars().all()
-    keyword_clusters_dict = {kc.cluster_label: [] for kc in keywordClusters}
+    keyword_cluster_id_dict = {kc.id: kc.cluster_label for kc in keywordClusters}
+    keyword_clusters_dict = {kc.cluster_label: set() for kc in keywordClusters}
+
+    for kc in keywordClusters:
+        for label in keyword_clusters_dict:
+            if kc.cluster_label == label:
+                keyword_clusters_dict[kc.cluster_label].add(kc.movie_id)
 
     if not list(keyword_clusters_dict.keys()):
         movie_keywords = await get_movie_keywords(session=session)
@@ -110,15 +121,15 @@ async def post_keyword_clusers(session: AsyncSession = Depends(get_async_session
                     )
                     session.add(keyword_cluster)
         await session.commit()
-
-        return {"status": "success", "created_cluster": cluster_labels_dict}
-
-    for kc in keywordClusters:
-        keyword_clusters_dict[kc.cluster_label].append(kc.movie_id)
+        await session.flush()
+        return post_keyword_clusers(session)
 
     return {
         "status": "clusters already exist",
-        "existing_cluster_ids": cluster_labels_dict,
+        "existing_clusters_ids_labels": keyword_cluster_id_dict,
+        "existing_clusters_labels_movies_ids": {
+            k: list(v) for k, v in keyword_clusters_dict.items()
+        },
     }
 
 

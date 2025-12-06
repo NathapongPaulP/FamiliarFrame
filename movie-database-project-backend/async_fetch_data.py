@@ -108,10 +108,10 @@ async def asyncFetchMovies(numPage: int, headers: dict, listUrls: str) -> dict:
                 movieBase["overview"] = moviesOverview[i][j]
                 movieBase["adult"] = moviesIsAdult[i][j]
                 movieBase["poster_path"] = (
-                    f"https://image.tmdb.org/t/p/w300/{moviesPosterPath[i][j]}"
+                    f"https://image.tmdb.org/t/p/w300{moviesPosterPath[i][j]}"
                 )
                 movieBase["backdrop_path"] = (
-                    f"https://image.tmdb.org/t/p/w300/{moviesBackdropPath[i][j]}"
+                    f"https://image.tmdb.org/t/p/w300{moviesBackdropPath[i][j]}"
                 )
                 movieBase["release_date"] = moviesReleaseDate[i][j]
                 movieBase["genres"] = movieGenres[i][j]

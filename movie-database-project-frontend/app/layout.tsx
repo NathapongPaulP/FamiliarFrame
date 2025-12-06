@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inriaSerif.variable} ${inder.variable} antialiased`}
+        className={`${inriaSerif.variable} ${inder.variable} antialiased overflow-x-hidden`}
       >
         {children}
       </body>
