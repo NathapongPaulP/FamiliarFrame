@@ -4,14 +4,9 @@ import { ClustersIdsLabelsMovies } from "@/src/api/ClustersIdsLabelsMovies";
 import { GetMovieDataFromIds } from "@/src/api/GetMovieDataFromIds";
 import { MovieIds } from "@/src/api/MovieIds";
 import cluster from "cluster";
-import {
-  motion,
-  useScroll,
-  useTransform,
-  useInView,
-  inertia,
-} from "motion/react";
-import { ElementType, useEffect, useRef, useState } from "react";
+import { read } from "fs";
+import { motion, useScroll, useTransform, useInView } from "motion/react";
+import { useEffect, useRef, useState } from "react";
 
 const Setup = () => {
   const setUpRef = useRef(null);
@@ -28,6 +23,9 @@ const Setup = () => {
   const [posterDisplay, setPosterDisplay] = useState("");
   const [movIdsToDisplay, setMovIdsToDisplay] = useState([]);
   const [posterPath, setPosterPath] = useState([]);
+  const [backdropPath, setBackdropPath] = useState([]);
+  const [onHoverImage, setOnHoverImage] = useState(true);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     async function fetchClustersIdsLabelsMovies() {
@@ -77,65 +75,76 @@ const Setup = () => {
   useEffect(() => {
     const labels = content.map((arr) => {
       const con = pickRandom(arr);
-      return clusterLabels.includes(con) ? con : undefined;
+      if (clusterLabels.includes(con)) return con;
     });
 
-    const labelsObj = {};
-    for (const arr of content) {
-      const con = pickRandom(arr);
-      labelsObj[con] = arr.indexOf(con);
-    }
+    const labelsObj = content.map((arr) => {
+      const con = arr[Math.floor(Math.random() * arr.length)];
+      return { label: con, idx: clusterLabels.indexOf(con) };
+    });
 
+    console.log(content);
     setRawLabelObj(labelsObj);
     const setOfLabels = new Set(labels);
     setLabelsList([...setOfLabels]);
   }, [content]);
 
   useEffect(() => {
+    if (labelsList.length === 0) {
+      return;
+    }
     const dk = labelsList.map((arr) => {
       return clusterIds[clusterLabels.indexOf(arr)];
     });
     setDynamicKey(dk);
-  }, [labelsList]);
+  }, [isInView, clusterMoviesIds, content, labelsList]);
 
   useEffect(() => {
     const movIds = Object.keys(rawLabelObj).map((key, index) => {
-      return clusterMoviesIds[index][rawLabelObj[key]];
+      const { label, idx } = rawLabelObj[key];
+      return clusterMoviesIds[index][idx];
     });
-    setMovIdsToDisplay(movIds);
-  }, [rawLabelObj]);
+
+    const filteredMovIds = movIds.filter((x) => x !== undefined);
+
+    setMovIdsToDisplay(filteredMovIds);
+    console.log(filteredMovIds);
+    console.log(rawLabelObj);
+  }, [isInView, clusterMoviesIds, content, labelsList, rawLabelObj]);
 
   useEffect(() => {
     async function fetchMoviesToDisplay() {
-      const movieDatas = [];
+      const moviePosterDatas = [];
+      const movieBackdropDatas = [];
       for (const id of movIdsToDisplay) {
         const data = await GetMovieDataFromIds(id);
         const dataKey = Object.keys(data.movie);
         for (const key of dataKey) {
           if (key === "poster_path") {
-            movieDatas.push(data.movie[key]);
+            moviePosterDatas.push(data.movie[key]);
+          } else if (key === "backdrop_path") {
+            movieBackdropDatas.push(data.movie[key]);
           }
         }
       }
-      return movieDatas;
+      setPosterPath(moviePosterDatas);
+      setBackdropPath(movieBackdropDatas);
+      return { moviePosterDatas, movieBackdropDatas };
     }
-    fetchMoviesToDisplay().then((data) => {
-      setPosterPath(data);
-      console.log(data);
-    });
+    fetchMoviesToDisplay();
   }, [movIdsToDisplay]);
 
   return (
     <>
       <div
         ref={setUpRef}
-        className="relative grid grid-cols-2 h-[300vh] w-screen z-1 bg-violet-1000"
+        className="relative flex h-[300vh] w-screen z-1 bg-violet-1000"
       >
         <SetupText
           scrollYProgress={scrollYProgress}
           labelsList={labelsList}
           dynamicKey={dynamicKey}
-          setUpFixed={setUpFixed}
+          ready={ready}
         />
         <div className="w-[50vw] h-screen">
           <Poster
@@ -143,6 +152,10 @@ const Setup = () => {
             posterDisplay={posterDisplay}
             posterPath={posterPath}
             scrollYProgress={scrollYProgress}
+            onHoverImage={onHoverImage}
+            setOnHoverImage={setOnHoverImage}
+            backdropPath={backdropPath}
+            ready={ready}
           />
         </div>
       </div>
@@ -158,7 +171,7 @@ const DynamicText = ({ scrollYProgress, content, index }) => {
 
   return (
     <motion.div
-      className="relative ml-[5vw] mb-[5vh] text-responsive-sm text-white"
+      className="relative ml-[5vw] mb-[5vh] max-[1921px]:text-responsive-xs min-[2560]:text-responsive-sm text-white"
       style={{ opacity }}
     >
       {content}
@@ -166,36 +179,50 @@ const DynamicText = ({ scrollYProgress, content, index }) => {
   );
 };
 
-const SetupText = ({ scrollYProgress, labelsList, dynamicKey, setUpFixed }) => {
-  return (
-    <div className="top-20 w-[50vw] h-full" style={{ position: setUpFixed }}>
-      {labelsList.map((label, index) => {
-        return (
-          <DynamicText
-            key={dynamicKey[index]}
-            scrollYProgress={scrollYProgress}
-            content={label}
-            index={index}
-          />
-        );
-      })}
-    </div>
-  );
+const SetupText = ({ scrollYProgress, labelsList, dynamicKey, ready }) => {
+  if (!ready)
+    return (
+      <div className="sticky top-[15vh] mt-20 w-[50vw] h-screen">
+        {labelsList.map((label, index) => {
+          return (
+            <DynamicText
+              key={dynamicKey[index]}
+              scrollYProgress={scrollYProgress}
+              content={label}
+              index={index}
+            />
+          );
+        })}
+      </div>
+    );
 };
 
-const Poster = ({ setUpFixed, posterDisplay, posterPath, scrollYProgress }) => {
-  return posterPath.map((path, index) => {
-    return (
-      <DynamicPoster
-        key={index}
-        scrollYProgress={scrollYProgress}
-        path={path}
-        index={index}
-        posterDisplay={posterDisplay}
-        setUpFixed={setUpFixed}
-      />
-    );
-  });
+const Poster = ({
+  setUpFixed,
+  posterDisplay,
+  posterPath,
+  scrollYProgress,
+  onHoverImage,
+  setOnHoverImage,
+  backdropPath,
+  ready,
+}) => {
+  if (!ready)
+    return posterPath.map((path, index) => {
+      return (
+        <DynamicPoster
+          key={index}
+          scrollYProgress={scrollYProgress}
+          path={path}
+          index={index}
+          posterDisplay={posterDisplay}
+          setUpFixed={setUpFixed}
+          onHoverImage={onHoverImage}
+          setOnHoverImage={setOnHoverImage}
+          backdropPath={backdropPath}
+        />
+      );
+    });
 };
 
 const DynamicPoster = ({
@@ -204,29 +231,50 @@ const DynamicPoster = ({
   index,
   posterDisplay,
   setUpFixed,
+  onHoverImage,
+  setOnHoverImage,
+  backdropPath,
 }) => {
   const yRange = [
     index * 0.1,
     index * 0.1 + 0.01,
     index * 0.1 + 0.05,
-    index * 0.1 + 0.051,
+    index * 0.1 + 0.099,
     index * 0.1 + 0.1,
   ];
-  const opacity = useTransform(scrollYProgress, yRange, [0, 0.9, 1, 0, 0]);
+  const display = useTransform(scrollYProgress, yRange, [
+    "none",
+    "flex",
+    "flex",
+    "flex",
+    "none",
+  ]);
 
   return (
-    <motion.img
-      className="top-[25vh] right-[20vw]"
+    <motion.div
+      className="flex top-[20vh] left-[64vw] justify-center align-middle"
       key={index}
-      src={path}
       style={{
         display: posterDisplay,
         position: setUpFixed,
-        height: "50vh",
         width: "auto",
-        opacity,
+        height: "50vh",
       }}
-    ></motion.img>
+      whileHover={{ width: "75vh", height: "50vh", left: "51vw" }}
+    >
+      <motion.img
+        src={onHoverImage ? path : backdropPath[index]}
+        style={{
+          height: "100%",
+          width: "auto",
+          display,
+        }}
+        whileHover={{ width: "150%", height: "auto" }}
+        onHoverStart={() => setOnHoverImage(false)}
+        onHoverEnd={() => setOnHoverImage(true)}
+        transition={{duration: 0.1}}
+      ></motion.img>
+    </motion.div>
   );
 };
 
