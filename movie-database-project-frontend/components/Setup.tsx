@@ -4,7 +4,6 @@ import { ClustersIdsLabelsMovies } from "@/src/api/ClustersIdsLabelsMovies";
 import { GetMovieDataFromIds } from "@/src/api/GetMovieDataFromIds";
 import { MovieIds } from "@/src/api/MovieIds";
 import cluster from "cluster";
-import { read } from "fs";
 import { motion, useScroll, useTransform, useInView } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 
@@ -25,7 +24,7 @@ const Setup = () => {
   const [posterPath, setPosterPath] = useState([]);
   const [backdropPath, setBackdropPath] = useState([]);
   const [onHoverImage, setOnHoverImage] = useState(true);
-  const [ready, setReady] = useState(false);
+  const [overview, setOverview] = useState([]);
 
   useEffect(() => {
     async function fetchClustersIdsLabelsMovies() {
@@ -116,6 +115,7 @@ const Setup = () => {
     async function fetchMoviesToDisplay() {
       const moviePosterDatas = [];
       const movieBackdropDatas = [];
+      const movieOverview = [];
       for (const id of movIdsToDisplay) {
         const data = await GetMovieDataFromIds(id);
         const dataKey = Object.keys(data.movie);
@@ -124,11 +124,14 @@ const Setup = () => {
             moviePosterDatas.push(data.movie[key]);
           } else if (key === "backdrop_path") {
             movieBackdropDatas.push(data.movie[key]);
+          } else if (key === "overview") {
+            movieOverview.push(data.movie[key]);
           }
         }
       }
       setPosterPath(moviePosterDatas);
       setBackdropPath(movieBackdropDatas);
+      setOverview(movieOverview);
       return { moviePosterDatas, movieBackdropDatas };
     }
     fetchMoviesToDisplay();
@@ -144,9 +147,9 @@ const Setup = () => {
           scrollYProgress={scrollYProgress}
           labelsList={labelsList}
           dynamicKey={dynamicKey}
-          ready={ready}
+          setUpFixed={setUpFixed}
         />
-        <div className="w-[50vw] h-screen">
+        <div className="relative w-[50vw] h-screen">
           <Poster
             setUpFixed={setUpFixed}
             posterDisplay={posterDisplay}
@@ -155,7 +158,7 @@ const Setup = () => {
             onHoverImage={onHoverImage}
             setOnHoverImage={setOnHoverImage}
             backdropPath={backdropPath}
-            ready={ready}
+            overview={overview}
           />
         </div>
       </div>
@@ -179,22 +182,21 @@ const DynamicText = ({ scrollYProgress, content, index }) => {
   );
 };
 
-const SetupText = ({ scrollYProgress, labelsList, dynamicKey, ready }) => {
-  if (!ready)
-    return (
-      <div className="sticky top-[15vh] mt-20 w-[50vw] h-screen">
-        {labelsList.map((label, index) => {
-          return (
-            <DynamicText
-              key={dynamicKey[index]}
-              scrollYProgress={scrollYProgress}
-              content={label}
-              index={index}
-            />
-          );
-        })}
-      </div>
-    );
+const SetupText = ({ scrollYProgress, labelsList, dynamicKey, setUpFixed }) => {
+  return (
+    <div className="sticky top-[15vh] mt-20 w-[50vw] h-screen">
+      {labelsList.map((label, index) => {
+        return (
+          <DynamicText
+            key={dynamicKey[index]}
+            scrollYProgress={scrollYProgress}
+            content={label}
+            index={index}
+          />
+        );
+      })}
+    </div>
+  );
 };
 
 const Poster = ({
@@ -205,24 +207,24 @@ const Poster = ({
   onHoverImage,
   setOnHoverImage,
   backdropPath,
-  ready,
+  overview,
 }) => {
-  if (!ready)
-    return posterPath.map((path, index) => {
-      return (
-        <DynamicPoster
-          key={index}
-          scrollYProgress={scrollYProgress}
-          path={path}
-          index={index}
-          posterDisplay={posterDisplay}
-          setUpFixed={setUpFixed}
-          onHoverImage={onHoverImage}
-          setOnHoverImage={setOnHoverImage}
-          backdropPath={backdropPath}
-        />
-      );
-    });
+  return posterPath.map((path, index) => {
+    return (
+      <DynamicPoster
+        key={index}
+        scrollYProgress={scrollYProgress}
+        path={path}
+        index={index}
+        posterDisplay={posterDisplay}
+        setUpFixed={setUpFixed}
+        onHoverImage={onHoverImage}
+        setOnHoverImage={setOnHoverImage}
+        backdropPath={backdropPath}
+        overview={overview}
+      />
+    );
+  });
 };
 
 const DynamicPoster = ({
@@ -234,6 +236,7 @@ const DynamicPoster = ({
   onHoverImage,
   setOnHoverImage,
   backdropPath,
+  overview,
 }) => {
   const yRange = [
     index * 0.1,
@@ -252,7 +255,7 @@ const DynamicPoster = ({
 
   return (
     <motion.div
-      className="flex top-[20vh] left-[64vw] justify-center align-middle"
+      className="relative flex top-[20vh] left-[64vw] justify-center align-middle shadow-2xl"
       key={index}
       style={{
         display: posterDisplay,
@@ -262,7 +265,13 @@ const DynamicPoster = ({
       }}
       whileHover={{ width: "75vh", height: "50vh", left: "51vw" }}
     >
-      <motion.img
+      <motion.p
+        className="absolute text-white bottom-10 mx-5 text-shadow-black"
+        style={{ display }}
+      >
+        {onHoverImage ? null : overview[index]}
+      </motion.p>
+      <motion.img className="rounded-[15px]"
         src={onHoverImage ? path : backdropPath[index]}
         style={{
           height: "100%",
@@ -272,7 +281,6 @@ const DynamicPoster = ({
         whileHover={{ width: "150%", height: "auto" }}
         onHoverStart={() => setOnHoverImage(false)}
         onHoverEnd={() => setOnHoverImage(true)}
-        transition={{duration: 0.1}}
       ></motion.img>
     </motion.div>
   );
